@@ -1,0 +1,619 @@
+---
+title: "Wnt Over-expression Rescues Ab"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+short=TRUE #if short==TRUE, do not echo code chunks
+debug=FALSE
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='figures/vis_enrichments/',
+                      echo=!short, warning=debug, message=debug, dev=c("png", "pdf"))
+```
+
+```{r load libraries, include=FALSE}
+source("analysis/functions.R")
+library(DESeq2)
+library(ggplot2)
+library(genefilter)
+library(GenomicFeatures)
+library(biomaRt)
+library(knitr)
+library(reshape2)
+library(scales)
+library(Biostrings)
+library(kableExtra)
+library(RColorBrewer)
+library(grid)
+library(gridExtra)
+library(lattice)
+library(reshape)
+library(geneplotter)
+library(pheatmap)
+library(BSgenome.Dmelanogaster.UCSC.dm6)
+library(clusterProfiler)
+library(ReactomePA)
+library(enrichplot)
+library(stringr)
+library(cluster)
+library(factoextra)
+library(tidyverse)
+library(msigdbr)
+library(DT)
+library(data.table)
+library(ggpubr)
+library(enrichR)
+library(MotifDb)
+library(seqLogo)
+library(cowplot)
+```
+
+```{r}
+## If the directory doesn't exist, create it
+if(!dir.exists("analysis/output/V_E")){
+  dir.create("analysis/output/V_E")
+}
+```
+
+```{r files, include=FALSE}
+## Outputs required from QC.Rmd
+dds_qc <- readRDS("analysis/output/QC/dds_quality_control.rds")
+experimental_metadata <- readRDS("analysis/output/QC/experimental_metadata.rds")
+ensembl_genes <- readRDS("analysis/output/QC/ensembl_genes.rds")
+tpm <- readRDS("analysis/output/QC/tpm.rds")
+
+## Outputs required from DE.Rmd
+dds <- readRDS("analysis/output/DE/dds_de.rds")
+results_LRT <- readRDS("analysis/output/DE/results_LRT.rds")
+significant_rld <- readRDS("analysis/output/DE/significant_rld.rds")
+sig_de_granges <- readRDS("analysis/output/DE/sig_de_granges.rds")
+all_granges <- readRDS("analysis/output/DE/all_granges.rds")
+
+## Global Variables
+nc <- counts(dds, normalized = TRUE)
+```
+
+
+# Heatmap {.tabset}
+```{r}
+# extracting the assay from the rld object
+sig_mat_rld = assay(significant_rld)
+
+# leave out A-Beta-Cry2-mCh  
+sig_mat_rld = sig_mat_rld[2:nrow(sig_mat_rld),]
+
+# The apply function swaps the rows to samples and columns to genes -- the standard is the other way around: samples in cols and genes in rows, hence the transpose function
+zscores = t(apply(sig_mat_rld, 1, function(x){ (x - mean(x)) / sd(x) }))
+
+# distance matrix
+dd = as.dist((1 - cor(t(zscores)))/2)
+```
+
+```{r}
+annotation = data.frame(condition = rep(c("Control", "Light", "Wnt", "Wnt_Light"),
+                                            c(3, 3, 3, 2)))
+
+row.names(annotation) = experimental_metadata$sample_id 
+anno_colours = list(condition = c(Control = "#C05746", Light = "#E9B44C", Wnt = "#7EB09B", Wnt_Light = "#086788"),
+                    Cluster = c("1" = "#1E231B", "2" = "#506D36", "3" = "#85955F", "4" = "#4E8745", "5" = "#68AC5D" , "6" = "#8EC186" ))
+```
+
+## 6 Clusters
+```{r}
+pam_clust <- generate_data(zscores, 6, "pam")
+pam_clust <- as.data.frame(pam_clust)
+pam_clust$Cluster <- factor(pam_clust$Cluster, levels = c(3,2,1,5,4,6))
+pam_clust <- pam_clust[order(pam_clust$Cluster),]
+
+pheatmap(pam_clust[,1:(ncol(pam_clust)-1)],
+         color = colorRampPalette(rev(brewer.pal(n = 7, name = "RdBu")))(100),
+         fontsize_row = 5.5,
+         annotation_col = annotation,
+         annotation_colors = anno_colours,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE)
+```
+
+```{r}
+pam_clust_df <- as.data.frame(pam_clust)
+pam_clust_df$gene_name <- ensembl_genes[rownames(pam_clust_df),]$external_gene_name
+
+pam_clust1_genes <- pam_clust_df[pam_clust_df$Cluster == 3, ] %>%
+  dplyr::select(-Cluster)
+
+pam_clust2_genes <- pam_clust_df[pam_clust_df$Cluster == 2, ] %>%
+  dplyr::select(-Cluster)
+
+pam_clust3_genes <- pam_clust_df[pam_clust_df$Cluster == 1, ] %>%
+  dplyr::select(-Cluster)
+
+pam_clust4_genes <- pam_clust_df[pam_clust_df$Cluster == 5, ] %>%
+  dplyr::select(-Cluster)
+
+pam_clust5_genes <- pam_clust_df[pam_clust_df$Cluster == 4, ] %>%
+  dplyr::select(-Cluster)
+
+pam_clust6_genes <- pam_clust_df[pam_clust_df$Cluster == 6, ] %>%
+  dplyr::select(-Cluster)
+```
+
+pam_cluster | Number of Genes
+:-----: | :-----:
+1 | `r nrow(pam_clust1_genes)`
+2 | `r nrow(pam_clust2_genes)`
+3 | `r nrow(pam_clust3_genes)`
+4 | `r nrow(pam_clust4_genes)`
+5 | `r nrow(pam_clust5_genes)`
+6 | `r nrow(pam_clust6_genes)`
+**Total** | **`r nrow(pam_clust1_genes)+nrow(pam_clust2_genes)+nrow(pam_clust3_genes)+nrow(pam_clust4_genes)+nrow(pam_clust5_genes)+nrow(pam_clust6_genes)`**
+
+# Expression Boxplots of Representative Genes
+```{r}
+# could do representative genes, or the whole cluster in general...
+# let's just do the representative genes first
+all_nc = nc[rownames(pam_clust_df),]
+rownames(all_nc) = pam_clust_df$gene_name
+all_nc = as.data.frame(all_nc)
+
+legend <- extracting_legend(all_nc, "psh")
+
+c1 <- gene_boxplot(all_nc, "knrl", 0, 500)
+c2 <- gene_boxplot(all_nc, "InR", 0, 4000)
+c3 <- gene_boxplot(all_nc, "pan", 1000, 3500)
+c4 <- gene_boxplot(all_nc, "Notum", 0, 200)
+c5 <- gene_boxplot(all_nc, "pros", 0, 500)
+c6 <- gene_boxplot(all_nc, "plum", 0, 500)
+
+all_plots <- plot_grid(plotlist = list(c1,c2,c3,c4,c5,c6), nrow = 2, ncol = 3)
+plot_grid(legend, all_plots, nrow = 2, ncol = 1, rel_heights = c(.1, 1))
+```
+
+# Enrichments {.tabset}
+```{r}
+#listEnrichrSites()
+setEnrichrSite("FlyEnrichr")
+dbs <- listEnrichrDbs()
+to_check <- c("GO_Biological_Process_2018", "GO_Molecular_Function_2018", "KEGG_2019")
+```
+
+## Cluster 1
+```{r}
+pc1 = pam_clust1_genes$gene_name
+eresList1 <- enrichr(pc1, databases = to_check)
+```
+
+### GO Biological Processes
+```{r}
+eresList1$GO_Biological_Process_2018 %>%
+  plot_enrichr("GO_Biological_Process_2018")
+
+c1_go = eresList1$GO_Biological_Process_2018 %>%
+  filter(Adjusted.P.value < 0.1) %>%
+  select(Term, Overlap, Adjusted.P.value) %>%
+  arrange(Adjusted.P.value) %>%
+  mutate(Cluster = "I") %>%
+  filter(grepl("peroxisome organization|anion transport|mitochondrial gene expression|cellular macromolecule catabolic process|glucose transport", Term))
+
+write.table(eresList1$GO_Biological_Process_2018, "analysis/output/V_E/c1_go.txt", row.names = TRUE, col.names = TRUE, sep="\t", quote = FALSE)
+
+datatable(eresList1[[1]], options = list(scrollX = TRUE), class = "white-space: nowrap")
+```
+
+### KEGG 2019
+```{r}
+eresList1$KEGG_2019 %>%
+  plot_enrichr("KEGG_2019") 
+
+c1_kegg = eresList1$KEGG_2019 %>%
+  filter(Adjusted.P.value < 0.1) %>%
+  select(Term, Overlap, Adjusted.P.value) %>%
+  arrange(Adjusted.P.value) %>%
+  mutate(Cluster = "I") %>%
+  filter(grepl("Peroxisome|ABC transporters|Drug metabolism|RNA degradation|Phototransduction", Term))
+
+write.table(eresList1$KEGG_2019, "analysis/output/V_E/c1_kegg.txt", row.names = TRUE, col.names = TRUE, sep="\t", quote = FALSE)
+
+datatable(eresList1[[3]], options = list(scrollX = TRUE), class = "white-space: nowrap")
+```
+
+## Cluster 2
+```{r}
+pc2 = pam_clust2_genes$gene_name
+eresList2 <- enrichr(pc2, databases = to_check)
+```
+
+### GO Biological Processes
+```{r}
+eresList2$GO_Biological_Process_2018 %>%
+  plot_enrichr("GO_Biological_Process_2018")
+
+c2_go = eresList2$GO_Biological_Process_2018 %>%
+  filter(Adjusted.P.value < 0.1) %>%
+  select(Term, Overlap, Adjusted.P.value) %>%
+  arrange(Adjusted.P.value) %>%
+  mutate(Cluster = "II") %>%
+  head(5)
+
+write.table(eresList2$GO_Biological_Process_2018, "analysis/output/V_E/c2_go.txt", row.names = TRUE, col.names = TRUE, sep="\t", quote = FALSE)
+
+datatable(eresList2[[1]], options = list(scrollX = TRUE), class = "white-space: nowrap")
+```
+
+### KEGG 2019
+```{r}
+eresList2$KEGG_2019 %>%
+  plot_enrichr("KEGG_2019") 
+
+c2_kegg = eresList2$KEGG_2019 %>%
+  filter(Adjusted.P.value < 0.1) %>%
+  select(Term, Overlap, Adjusted.P.value) %>%
+  arrange(Adjusted.P.value) %>%
+  mutate(Cluster = "II")
+
+write.table(eresList2$KEGG_2019, "analysis/output/V_E/c2_kegg.txt", row.names = TRUE, col.names = TRUE, sep="\t", quote = FALSE)
+
+datatable(eresList2[[3]], options = list(scrollX = TRUE), class = "white-space: nowrap")
+```
+
+## Cluster 3
+```{r}
+pc3 = pam_clust3_genes$gene_name
+eresList3 <- enrichr(pc3, databases = to_check)
+```
+
+### GO Biological Processes
+```{r}
+eresList3$GO_Biological_Process_2018 %>%
+  plot_enrichr("GO_Biological_Process_2018")
+
+c3_go = eresList3$GO_Biological_Process_2018 %>%
+  filter(Adjusted.P.value < 0.1) %>%
+  select(Term, Overlap, Adjusted.P.value) %>%
+  arrange(Adjusted.P.value) %>%
+  mutate(Cluster = "III") %>%
+  head(5)
+
+write.table(eresList3$GO_Biological_Process_2018, "analysis/output/V_E/c3_go.txt", row.names = TRUE, col.names = TRUE, sep="\t", quote = FALSE)
+  
+datatable(eresList3[[1]], options = list(scrollX = TRUE), class = "white-space: nowrap")
+```
+
+### KEGG 2019
+```{r}
+eresList3$KEGG_2019 %>%
+  plot_enrichr("KEGG_2019") 
+
+c3_kegg = eresList3$KEGG_2019 %>%
+  filter(Adjusted.P.value < 0.1) %>%
+  select(Term, Overlap, Adjusted.P.value) %>%
+  arrange(Adjusted.P.value) %>%
+  mutate(Cluster = "III") 
+
+write.table(eresList3$KEGG_2019, "analysis/output/V_E/c3_kegg.txt", row.names = TRUE, col.names = TRUE, sep="\t", quote = FALSE)
+
+datatable(eresList3[[3]], options = list(scrollX = TRUE), class = "white-space: nowrap")
+```
+
+## Cluster 4
+```{r}
+pc4 = pam_clust4_genes$gene_name
+eresList4 <- enrichr(pc4, databases = to_check)
+```
+
+### GO Biological Processes
+```{r}
+eresList4$GO_Biological_Process_2018 %>%
+  plot_enrichr("GO_Biological_Process_2018")
+
+c4_go = eresList4$GO_Biological_Process_2018 %>%
+  filter(Adjusted.P.value < 0.1) %>%
+  select(Term, Overlap, Adjusted.P.value) %>%
+  arrange(Adjusted.P.value) %>%
+  mutate(Cluster = "IV") %>%
+  head(5)
+
+write.table(eresList4$GO_Biological_Process_2018, "analysis/output/V_E/c4_go.txt", row.names = TRUE, col.names = TRUE, sep="\t", quote = FALSE)
+
+datatable(eresList4[[1]], options = list(scrollX = TRUE), class = "white-space: nowrap")
+```
+
+### KEGG 2019
+```{r}
+eresList4$KEGG_2019 %>%
+  plot_enrichr("KEGG_2019") 
+
+c4_kegg = eresList4$KEGG_2019 %>%
+  filter(Adjusted.P.value < 0.1) %>%
+  select(Term, Overlap, Adjusted.P.value) %>%
+  arrange(Adjusted.P.value) %>%
+  mutate(Cluster = "IV") %>%
+  filter(grepl("Lysosome|Toll and Imd signaling pathway|Wnt signaling pathway|Other glycan degradation|Starch and sucrose metabolism|Galactose metabolism", Term))
+
+write.table(eresList4$KEGG_2019, "analysis/output/V_E/c4_kegg.txt", row.names = TRUE, col.names = TRUE, sep="\t", quote = FALSE)
+
+datatable(eresList4[[3]], options = list(scrollX = TRUE), class = "white-space: nowrap")
+```
+
+## Cluster 5
+```{r}
+pc5 = pam_clust5_genes$gene_name
+eresList5 <- enrichr(pc5, databases = to_check)
+```
+
+### GO Biological Processes
+```{r}
+eresList5$GO_Biological_Process_2018 %>%
+  plot_enrichr("GO_Biological_Process_2018")
+
+c5_go = eresList5$GO_Biological_Process_2018 %>%
+  filter(Adjusted.P.value < 0.1) %>%
+  select(Term, Overlap, Adjusted.P.value) %>%
+  arrange(Adjusted.P.value) %>%
+  mutate(Cluster = "V") %>%
+  head(5)
+
+write.table(eresList5$GO_Biological_Process_2018, "analysis/output/V_E/c5_go.txt", row.names = TRUE, col.names = TRUE, sep="\t", quote = FALSE)
+
+datatable(eresList5[[1]], options = list(scrollX = TRUE), class = "white-space: nowrap")
+```
+
+### KEGG 2019
+```{r}
+eresList5$KEGG_2019 %>%
+  plot_enrichr("KEGG_2019") 
+
+c5_kegg = eresList5$KEGG_2019 %>%
+  filter(Adjusted.P.value < 0.1) %>%
+  select(Term, Overlap, Adjusted.P.value) %>%
+  arrange(Adjusted.P.value) %>%
+  mutate(Cluster = "V") %>%
+  filter(grepl("Alanine, aspartate and glutamate metabolism|Galactose metabolism|Peroxisome|Sphingolipid metabolism|Other glycan degradation", Term))
+
+write.table(eresList5$KEGG_2019, "analysis/output/V_E/c5_kegg.txt", row.names = TRUE, col.names = TRUE, sep="\t", quote = FALSE)
+
+datatable(eresList5[[3]], options = list(scrollX = TRUE), class = "white-space: nowrap")
+```
+
+## Cluster 6
+```{r}
+pc6 = pam_clust6_genes$gene_name
+eresList6 <- enrichr(pc6, databases = to_check)
+```
+
+### GO Biological Processes
+```{r}
+eresList6$GO_Biological_Process_2018 %>%
+  plot_enrichr("GO_Biological_Process_2018")
+
+c6_go = eresList6$GO_Biological_Process_2018 %>%
+  filter(Adjusted.P.value < 0.1) %>%
+  select(Term, Overlap, Adjusted.P.value) %>%
+  arrange(Adjusted.P.value) %>%
+  mutate(Cluster = "VI") %>%
+  head(5)
+
+write.table(eresList6$GO_Biological_Process_2018, "analysis/output/V_E/c6_go.txt", row.names = TRUE, col.names = TRUE, sep="\t", quote = FALSE)
+
+datatable(eresList6[[1]], options = list(scrollX = TRUE), class = "white-space: nowrap")
+```
+
+### KEGG 2019
+```{r}
+eresList6$KEGG_2019 %>%
+  plot_enrichr("KEGG_2019") 
+
+c6_kegg = eresList6$KEGG_2019 %>%
+  filter(Adjusted.P.value < 0.1) %>%
+  select(Term, Overlap, Adjusted.P.value) %>%
+  arrange(Adjusted.P.value) %>%
+  mutate(Cluster = "VI")
+
+write.table(eresList6$KEGG_2019, "analysis/output/V_E/c6_kegg.txt", row.names = TRUE, col.names = TRUE, sep="\t", quote = FALSE)
+
+datatable(eresList6[[3]], options = list(scrollX = TRUE), class = "white-space: nowrap")
+```
+
+# Enrichment Summary
+## KEGG
+```{r, fig.width=10}
+all_KEGG = rbindlist(list(c1_kegg,c2_kegg,c3_kegg,c4_kegg,c5_kegg,c6_kegg))
+
+all_KEGG %>%
+  mutate(Annotated = as.numeric(str_extract(as.character(Overlap), "\\d+$")),
+           Significant = as.numeric(str_extract(as.character(Overlap), "^\\d+")),
+           Ratio = Significant/Annotated) %>%
+  mutate(Cluster = factor(Cluster, levels = c("I", "II", "III", "IV", "V", "VI"))) %>%
+  group_by(Cluster) %>%
+  mutate(Term = factor(Term, levels = Term)) %>%
+  ggplot(aes(x = Cluster, y = Term)) +
+  geom_point(aes(colour = Adjusted.P.value, size = Ratio)) + 
+  ylab(NULL) + 
+  xlab("Cluster") +
+  scale_color_continuous(low="red", high="blue", guide=guide_colorbar(reverse=TRUE)) + 
+  scale_y_discrete(labels = function(x) str_wrap(x, width = 40),
+                   limits=rev) +
+  #labs(fill = "Adjusted p-value") +
+  guides(colour = guide_colorbar(title = "Adjusted p-value", reverse = TRUE),
+         size = guide_legend(title = "Gene Ratio")) +
+  theme(axis.text.x = element_text(size=8)) +
+  theme_bw()
+  #facet_grid(cols = vars(Cluster))
+```
+
+## GO:BP
+```{r}
+all_go = rbindlist(list(c1_go,c2_go,c3_go,c4_go,c5_go,c6_go))
+
+all_go %>%
+  mutate(Term = gsub("\\([^()]*\\)", "", Term),
+         Term = str_to_title(Term)) %>%
+  mutate(Annotated = as.numeric(str_extract(as.character(Overlap), "\\d+$")),
+           Significant = as.numeric(str_extract(as.character(Overlap), "^\\d+")),
+           Ratio = Significant/Annotated) %>%
+  mutate(Cluster = factor(Cluster, levels = c("I", "II", "III", "IV", "V", "VI"))) %>%
+  group_by(Cluster) %>%
+  mutate(Term = factor(Term, levels = Term)) %>%
+  ggplot(aes(x = Cluster, y = Term)) +
+  geom_point(aes(colour = Adjusted.P.value, size = Ratio)) + 
+  ylab(NULL) + 
+  xlab("Cluster") +
+  scale_color_continuous(low="red", high="blue", guide=guide_colorbar(reverse=TRUE)) + 
+  scale_y_discrete(labels = function(x) str_wrap(x, width = 60),
+                   limits=rev) +
+  #labs(fill = "Adjusted p-value") +
+  guides(colour = guide_colorbar(title = "Adjusted p-value", reverse = TRUE),
+         size = guide_legend(title = "Gene Ratio")) +
+  theme(axis.text.x = element_text(size=8)) +
+  theme_bw()
+
+# all_KEGG %>%
+#   mutate(Annotated = as.numeric(str_extract(as.character(Overlap), "\\d+$")),
+#            Significant = as.numeric(str_extract(as.character(Overlap), "^\\d+")),
+#            Ratio = Significant/Annotated) %>%
+#   group_by(Cluster) %>%
+#   mutate(Term = factor(Term, levels = Term[order(desc(Ratio))])) %>%
+#   ggplot(aes(x = Ratio, y = Term)) +
+#   geom_point(aes(colour = Adjusted.P.value, size = Ratio)) + 
+#   ylab(NULL) + 
+#   xlab("Gene Ratio") +
+#   scale_color_continuous(low="red", high="blue", guide=guide_colorbar(reverse=TRUE)) + 
+#   scale_y_discrete(labels = function(x) str_wrap(x, width = 40), 
+#                    limits=rev) +
+#   scale_x_continuous(limits = c(0,0.5)) +
+#   #labs(fill = "Adjusted p-value") +
+#   guides(colour = guide_colorbar(title = "Adjusted p-value", reverse = TRUE),
+#          size = guide_legend(title = "Gene Ratio")) +
+#   theme(axis.text.x = element_text(size=8)) +
+#   theme_bw() +
+#   facet_grid(cols = vars(Cluster))
+```
+
+# Gene Expression Plots {.tabset}
+## Cluster 1
+```{r, fig.width=15, fig.height=30}
+c1_kegg_sig <- eresList1$KEGG_2019 %>%
+  filter(Adjusted.P.value < 0.1) %>%
+  arrange(Adjusted.P.value)
+
+#unique(unlist(strsplit(c1_kegg_sig$Genes, ";")))
+
+cg1 <- gene_boxplot(all_nc, "CG14777", 500, 1000)
+cg2 <- gene_boxplot(all_nc, "CG5065", 7000, 18500)
+cg3 <- gene_boxplot(all_nc, "CG7970", 4000, 7000)
+sod <- gene_boxplot(all_nc, "Sod1", 11000, 18500)
+pex14 <- gene_boxplot(all_nc, "Pex14", 3000, 5000)
+pex13 <- gene_boxplot(all_nc, "Pex13", 2000, 3500)
+pex3 <- gene_boxplot(all_nc, "Pex3", 1000, 2000)
+pex6 <- gene_boxplot(all_nc, "Pex6", 500, 1500)
+pmp70 <- gene_boxplot(all_nc, "Pmp70", 7500, 32000)
+spat <- gene_boxplot(all_nc, "Spat", 0, 500)
+cg4 <- gene_boxplot(all_nc, "CG17597", 7000, 18000)
+cg5 <- gene_boxplot(all_nc, "CG18003", 0, 500)
+pmp34 <- gene_boxplot(all_nc, "PMP34", 1000, 2000)
+pex16 <- gene_boxplot(all_nc, "Pex16", 1500, 3000)
+cg6 <- gene_boxplot(all_nc, "CG9270", 0, 150)
+mdr <- gene_boxplot(all_nc, "Mdr65", 0, 200)
+l1 <- gene_boxplot(all_nc, "l.2.03659", 0, 500)
+cg7 <- gene_boxplot(all_nc, "CG7627", 1000, 12500)
+antdh <- gene_boxplot(all_nc, "antdh", 0, 150)
+jheh <- gene_boxplot(all_nc, "Jheh2", 2000, 5000)
+cg8 <- gene_boxplot(all_nc, "CG2680", 0, 750)
+eo <- gene_boxplot(all_nc, "Eo", 0, 700)
+cyp <- gene_boxplot(all_nc, "Cyp18a1", 0, 120)
+rrp <- gene_boxplot(all_nc, "Rrp4", 400, 800)
+dis <- gene_boxplot(all_nc, "Dis3", 700, 1500)
+pnp <- gene_boxplot(all_nc, "PNPase", 400, 700)
+hsp <- gene_boxplot(all_nc, "Hsp60A", 6500, 11000)
+cg9 <- gene_boxplot(all_nc, "CG9344", 0, 250)
+mtr <- gene_boxplot(all_nc, "Mtr4", 700, 1300)
+prat <- gene_boxplot(all_nc, "Prat", 500, 1000)
+adk <- gene_boxplot(all_nc, "Adk1", 500, 1100)
+cg10 <- gene_boxplot(all_nc, "CG42249", 12000, 34000)
+cg11 <- gene_boxplot(all_nc, "CG30016", 0, 180)
+cg12 <- gene_boxplot(all_nc, "CG4098", 0, 150)
+adgf <- gene_boxplot(all_nc, "Adgf.A", 2000, 12100)
+cg13 <- gene_boxplot(all_nc, "CG11089", 800, 1700)
+ady <- gene_boxplot(all_nc, "Ady43A", 200, 700)
+rl <- gene_boxplot(all_nc, "r.l", 200, 1100)
+gst <- gene_boxplot(all_nc, "GstD9", 200, 1400)
+adh <- gene_boxplot(all_nc, "Adh", 5000, 22000)
+gsts <- gene_boxplot(all_nc, "GstS1", 1000, 5000)
+ald <- gene_boxplot(all_nc, "Aldh.III", 2000, 4500)
+l2 <- gene_boxplot(all_nc, "l.2.k01209", 1000, 2000)
+crmp <- gene_boxplot(all_nc, "CRMP", 500, 800)
+gste <- gene_boxplot(all_nc, "GstE11", 300, 800)
+spla <- gene_boxplot(all_nc, "sPLA2", 0, 70)
+g3spla <- gene_boxplot(all_nc, "GIIIspla2", 200, 600)
+faa <- gene_boxplot(all_nc, "Faa", 0, 100)
+norpa <- gene_boxplot(all_nc, "norpA", 800, 1300)
+camk3 <- gene_boxplot(all_nc, "CaMKII", 2000, 3500)
+ggamma <- gene_boxplot(all_nc, "Ggamma30A", 1000, 2500)
+act <- gene_boxplot(all_nc, "Act79B", 0, 300)
+
+
+all_plots <- plot_grid(plotlist = list(cg1,cg2,cg3,sod,pex14,pex13,pex3,pex6,pmp70,spat,cg4,cg5,pmp34,pex16,cg6,mdr,l1,cg7,antdh,jheh,cg8,eo,cyp,rrp,dis,pnp,hsp,cg9,mtr,prat,adk,cg10,cg11,cg12,adgf,cg13,ady,rl,gst,adh,gsts,ald,l2,crmp,gste,spla,g3spla,faa,norpa,camk3,ggamma,act), nrow = ceiling(length(unique(unlist(strsplit(c1_kegg_sig$Genes, ";"))))/5), ncol = 5)
+plot_grid(legend, all_plots, nrow = 2, ncol = 1, rel_heights = c(.1, 1))
+```
+
+## Cluster 2
+```{r, fig.width=15, fig.height=20}
+c2_kegg_sig <- eresList2$KEGG_2019 %>%
+  filter(Adjusted.P.value < 0.1) %>%
+  arrange(Adjusted.P.value)
+
+legend <- extracting_legend(all_nc, "shrb")
+
+#unique(unlist(strsplit(c2_kegg_sig$Genes, ";")))
+
+shrb <- gene_boxplot(all_nc, "shrb", 3000, 5500)
+rbpn <- gene_boxplot(all_nc, "Rbpn.5", 1000, 1500)
+rab <- gene_boxplot(all_nc, "Rab35", 600, 1600)
+efa6 <- gene_boxplot(all_nc, "Efa6", 0, 2500)
+chmp2b <- gene_boxplot(all_nc, "CHMP2B", 1000, 2000)
+hrs <- gene_boxplot(all_nc, "Hrs", 1500, 3500)
+smurf <- gene_boxplot(all_nc, "Smurf", 2000, 4500)
+inr <- gene_boxplot(all_nc, "InR", 1000, 3500)
+gprk2 <- gene_boxplot(all_nc, "Gprk2", 1200, 2200)
+asap <- gene_boxplot(all_nc, "Asap", 2500, 7500)
+atg2 <- gene_boxplot(all_nc, "Atg2", 2500, 5000)
+cg5 <- gene_boxplot(all_nc, "CG5059", 4000, 12000)
+cp1 <- gene_boxplot(all_nc, "Cp1", 10000, 22000)
+ctsb1 <- gene_boxplot(all_nc, "CtsB1", 15000, 40000)
+akt1 <- gene_boxplot(all_nc, "Akt1", 2500, 6000)
+pi <- gene_boxplot(all_nc, "Pi3K92E", 1000, 3000)
+ragab <- gene_boxplot(all_nc, "RagA.B", 600, 1400)
+gga <- gene_boxplot(all_nc, "Gga", 1500, 3000)
+cg1 <- gene_boxplot(all_nc, "CG12163", 8000, 17000)
+npc2e <- gene_boxplot(all_nc, "Npc2e", 10000, 40000)
+vha <- gene_boxplot(all_nc, "VhaAC39.2", 0, 50)
+npc1b <- gene_boxplot(all_nc, "Npc1b", 0, 50000)
+cg11 <- gene_boxplot(all_nc, "CG11658", 2000, 6000)
+ipp <- gene_boxplot(all_nc, "Ipp", 200, 1200)
+cg6 <- gene_boxplot(all_nc, "CG6707", 1500, 4000)
+cam <- gene_boxplot(all_nc, "Cam", 20000, 45000)
+fz4 <- gene_boxplot(all_nc, "fz4", 600, 1200)
+
+
+all_plots <- plot_grid(plotlist = list(shrb,rbpn,rab,efa6,chmp2b,hrs,smurf,inr,gprk2,asap,atg2,cg5,cp1,ctsb1,akt1,pi,ragab,gga,cg1,npc2e,vha,npc1b,cg11,ipp,cg6,cam,fz4), nrow = ceiling(length(unique(unlist(strsplit(c2_kegg_sig$Genes, ";"))))/5), ncol = 5)
+plot_grid(legend, all_plots, nrow = 2, ncol = 1, rel_heights = c(.1, 1))
+```
+
+
+```{r}
+## writing out files
+anova <- as.data.frame(results_LRT)
+anova$Cluster = pam_clust_df[match(rownames(anova),rownames(pam_clust_df)),]$Cluster
+anova <- anova %>%
+ arrange(Cluster)
+write.csv(anova, "analysis/output/V_E/anova.csv")
+write.csv(pam_clust_df, "analysis/output/V_E/clusters.csv", row.names = TRUE, col.names = TRUE)
+```
+
+# Session Info
+```{r}
+sessionInfo()
+```

@@ -1,0 +1,12 @@
+sample_id,condition,replicate
+WT1,Control,"1"
+WT2,Control,"2"
+WT3,Control,"3"
+Ab1,Light,"1"
+Ab2,Light,"2"
+Ab3,Light,"3"
+Wg1,Wnt,"1"
+Wg2,Wnt,"2"
+Wg3,Wnt,"3"
+Wg_Ab1,Wnt_Light,"1"
+Wg_Ab2,Wnt_Light,"2"

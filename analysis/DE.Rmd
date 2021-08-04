@@ -1,0 +1,314 @@
+---
+title: "Differential Expression"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+short=TRUE #if short==TRUE, do not echo code chunks
+debug=FALSE
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='figures/differentialexpression/',
+                      echo=!short, warning=debug, message=debug, dev=c("png", "pdf"))
+```
+
+```{r}
+source("analysis/functions.R")
+library(DESeq2)
+library(knitr)
+library(GenomicFeatures)
+library(RColorBrewer)
+library(gplots)
+library(biomaRt)
+library(grid)
+library(gridExtra)
+library(ggplot2)
+library(lattice)
+library(reshape)
+library(geneplotter)
+library(limma)
+library(tidyverse)
+```
+
+```{r}
+## If the output directory doesn't exist, create it
+if(!dir.exists("analysis/output/DE")){
+  dir.create("analysis/output/DE")
+}
+
+output_dir <- "analysis/output/DE/"
+```
+
+```{r load data}
+dds = readRDS("analysis/output/QC/dds_quality_control.rds")
+ensembl.genes= readRDS("analysis/output/QC/ensembl_genes.rds")
+lfc.threshold = log2(1.5)
+
+# Removing lowly expressed genes, only to be done once at the start of the differential expression step
+filter = apply(counts(dds, normalized=TRUE), 1, function(x){ mean(x) >= 10 })
+dds = dds[filter, ]
+```
+
+## Wald Tests {.tabset}
+```{r}
+wald_dds = nbinomWaldTest(dds)
+```
+
+### Light(Ab) vs Control(WT)
+```{r light_control}
+### Note the order of Light and Control - Light here is the numerator, Control is the denominator
+results_light_control = results(wald_dds, contrast = c("condition", "Light", "Control"),  filter=rowMeans(counts(wald_dds, normalized=TRUE)), test="Wald", alpha=0.1, independentFiltering=TRUE)
+
+results_light_control$gene_biotype= ensembl.genes$gene_biotype[match(row.names(results_light_control), ensembl.genes$gene_id)]
+results_light_control$external_gene_name= ensembl.genes$external_gene_name[match(row.names(results_light_control), ensembl.genes$gene_id)]
+
+hist(results_light_control$pvalue, xlab = "p-value", ylab = "Frequency")
+```
+**Number of significant genes (padj < 0.1 & log2FoldChange < log2(1.5)):**
+```{r}
+sum(results_light_control$padj < 0.1 & abs(results_light_control$log2FoldChange) > lfc.threshold, na.rm = T)
+```
+
+**Is A-Beta-Cry2-mCh significantly differentially expressed?**:
+```{r}
+kable(results_light_control[1,])
+```
+
+```{r}
+### Writing out .csv files
+write_files(results_light_control, "light", "control")
+
+### Volcano plot
+generate_volcano(results_light_control,"Light(Ab)","Control(WT)")
+
+### MA plot
+generate_ma(results_light_control)
+```
+
+### Wnt(Wg) vs. Control(WT)
+```{r wnt_control}
+### Note the order of Wnt and Control - Wnt here is the numerator, Control is the denominator
+results_wnt_control = results(wald_dds, contrast = c("condition", "Wnt", "Control"),  filter=rowMeans(counts(wald_dds, normalized=TRUE)), test="Wald", alpha=0.1, independentFiltering=TRUE)
+
+results_wnt_control$gene_biotype= ensembl.genes$gene_biotype[match(row.names(results_wnt_control), ensembl.genes$gene_id)]
+results_wnt_control$external_gene_name= ensembl.genes$external_gene_name[match(row.names(results_wnt_control), ensembl.genes$gene_id)]
+
+hist(results_wnt_control$pvalue, xlab = "p-value", ylab = "Frequency")
+```
+**Number of significant genes (padj < 0.1 & log2FoldChange < log2(1.5)):**
+```{r}
+sum(results_wnt_control$padj < 0.1 & abs(results_wnt_control$log2FoldChange) > lfc.threshold, na.rm = T)
+```
+
+**Is A-Beta-Cry2-mCh significantly differentially expressed?**:
+```{r}
+kable(results_wnt_control[1,])
+```
+
+```{r}
+### Writing out .csv files
+write_files(results_wnt_control, "wnt", "control")
+
+### Volcano plot
+generate_volcano(results_wnt_control,"Wnt(Wg)","Control(WT)")
+
+### MA plot
+generate_ma(results_wnt_control)
+```
+
+### Wnt_Light(Wg_Ab) vs. Control(WT)
+```{r wntlight_control}
+### Note the order of Wnt_Light and Control - Wnt_Light here is the numerator, Control is the denominator
+results_wntlight_control = results(wald_dds, contrast = c( "condition", "Wnt_Light", "Control"),  filter=rowMeans(counts(wald_dds, normalized=TRUE)), test="Wald", alpha=0.1, independentFiltering=TRUE)
+
+results_wntlight_control$gene_biotype= ensembl.genes$gene_biotype[match(row.names(results_wntlight_control), ensembl.genes$gene_id)]
+results_wntlight_control$external_gene_name= ensembl.genes$external_gene_name[match(row.names(results_wntlight_control), ensembl.genes$gene_id)]
+
+hist(results_wntlight_control$pvalue, xlab = "p-value", ylab = "Frequency")
+```
+**Number of significant genes (padj < 0.1 & log2FoldChange < log2(1.5)):**
+```{r}
+sum(results_wntlight_control$padj < 0.1 & abs(results_wntlight_control$log2FoldChange) > lfc.threshold, na.rm = T)
+```
+
+**Is A-Beta-Cry2-mCh significantly differentially expressed?**:
+```{r}
+kable(results_wntlight_control[1,])
+```
+
+```{r}
+### Writing out .csv files
+write_files(results_wntlight_control, "wntlight", "control")
+
+### Volcano plot
+generate_volcano(results_wntlight_control,"Wnt_Light(Wg_Ab)","Control(WT)")
+
+### MA plot
+generate_ma(results_wntlight_control)
+
+```
+
+### Wnt(Wg) vs. Light(Ab)
+```{r light_wnt}
+### Note the order of Wnt and Light - Wnt here is the numerator, Light is the denominator
+results_wnt_light = results(wald_dds, contrast = c( "condition", "Wnt", "Light"),  filter=rowMeans(counts(wald_dds, normalized=TRUE)), test="Wald", alpha=0.1, independentFiltering=TRUE)
+
+results_wnt_light$gene_biotype= ensembl.genes$gene_biotype[match(row.names(results_wnt_light), ensembl.genes$gene_id)]
+results_wnt_light$external_gene_name= ensembl.genes$external_gene_name[match(row.names(results_wnt_light), ensembl.genes$gene_id)]
+
+hist(results_wnt_light$pvalue, xlab = "p-value", ylab = "Frequency")
+```
+
+**Number of significant genes (padj < 0.1 & log2FoldChange < log2(1.5)):**
+```{r}
+sum(results_wnt_light$padj < 0.1 & abs(results_wnt_light$log2FoldChange) > lfc.threshold, na.rm = T)
+```
+
+**Is A-Beta-Cry2-mCh significantly differentially expressed?**:
+```{r}
+kable(results_wnt_light[1,])
+```
+
+```{r}
+### Writing out .csv files
+write_files(results_wnt_light, "wnt", "light")
+
+### Volcano plot
+generate_volcano(results_wnt_light,"Wnt(Wg)","Light(Ab)")
+
+### MA plot
+generate_ma(results_wnt_light)
+```
+
+### Wnt_Light(Wg_Ab) vs Light(Ab)
+```{r light_wntlight}
+### Note the order of Wnt_Light and Light - Wnt_Light here is the numerator, Light is the denominator
+results_wntlight_light = results(wald_dds, contrast = c( "condition", "Wnt_Light", "Light"),  filter=rowMeans(counts(wald_dds, normalized=TRUE)), test="Wald", alpha=0.1, independentFiltering=TRUE)
+
+results_wntlight_light$gene_biotype= ensembl.genes$gene_biotype[match(row.names(results_wntlight_light), ensembl.genes$gene_id)]
+results_wntlight_light$external_gene_name= ensembl.genes$external_gene_name[match(row.names(results_wntlight_light), ensembl.genes$gene_id)]
+
+hist(results_wntlight_light$pvalue, xlab = "p-value", ylab = "Frequency")
+```
+
+**Number of significant genes (padj < 0.1 & log2FoldChange < log2(1.5)):**
+```{r}
+sum(results_wntlight_light$padj < 0.1 & abs(results_wntlight_light$log2FoldChange) > lfc.threshold, na.rm = T)
+```
+
+**Is A-Beta-Cry2-mCh significantly differentially expressed?**:
+```{r}
+kable(results_wntlight_light[1,])
+```
+
+```{r}
+### Writing out .csv files
+write_files(results_wntlight_light, "wntlight", "light")
+
+### Volcano plot
+generate_volcano(results_wntlight_light,"Wnt_Light(Wg_Ab)","Light(Ab)")
+
+### MA plot
+generate_ma(results_wntlight_light)
+```
+
+### Wnt_Light(Wg_Ab) vs. Wnt(Wg)
+```{r wnt_wntlight}
+# note the order of Wnt_Light Wnt - Wnt_Light here is the numerator, Wnt is the denominator
+results_wntlight_wnt = results(wald_dds, contrast = c("condition", "Wnt_Light", "Wnt"),  filter=rowMeans(counts(wald_dds, normalized=TRUE)), test="Wald", alpha=0.1, independentFiltering=TRUE)
+
+results_wntlight_wnt$gene_biotype= ensembl.genes$gene_biotype[match(row.names(results_wntlight_wnt), ensembl.genes$gene_id)]
+results_wntlight_wnt$external_gene_name= ensembl.genes$external_gene_name[match(row.names(results_wntlight_wnt), ensembl.genes$gene_id)]
+
+hist(results_wntlight_wnt$pvalue, xlab = "p-value", ylab = "Frequency")
+```
+
+**Number of significant genes (padj < 0.1 & log2FoldChange < log2(1.5)):**
+```{r}
+sum(results_wntlight_wnt$padj < 0.1 & abs(results_wntlight_wnt$log2FoldChange) > lfc.threshold, na.rm = T)
+```
+
+**Is A-Beta-Cry2-mCh significantly differentially expressed?**:
+```{r}
+kable(results_wntlight_wnt[1,])
+```
+
+```{r}
+### Writing out .csv files
+write_files(results_wntlight_wnt, "wntlight", "wnt")
+
+### Volcano plot
+generate_volcano(results_wntlight_wnt,"Wnt_Light(Wg_Ab)","Wnt(Wg)")
+
+### MA plot
+generate_ma(results_wntlight_wnt)
+```
+
+## Likelihood Ratio Test
+```{r LRT}
+dds_LRT = nbinomLRT(dds, reduced = ~1)
+results_LRT = results(dds_LRT)
+
+results_LRT$gene_biotype= ensembl.genes$gene_biotype[match(row.names(results_LRT), ensembl.genes$gene_id)]
+results_LRT$external_gene_name= ensembl.genes$external_gene_name[match(row.names(results_LRT), ensembl.genes$gene_id)]
+
+hist(results_LRT$pvalue)
+```
+
+**Number of significant genes (padj < 0.1):**
+```{r}
+sum(results_LRT$padj < 0.1, na.rm=T)
+```
+
+```{r}
+## Get significant genes by 10% FDR 
+sig_padj_genes <- results_LRT[!is.na(results_LRT$padj),]
+sig_padj_genes <- sig_padj_genes[sig_padj_genes$padj < 0.1,]
+
+## Get the rld for all differentially expressed genes & rld for significant genes
+rld <- rlog(dds_LRT)
+significant_rld <- rld[rownames(sig_padj_genes)]
+```
+
+
+```{r for getting granges for motif enrichment analysis}
+sig_df = assay(significant_rld)
+sig_df = sig_df[2:nrow(sig_df),]
+
+## Differentially expressed genes
+sig_de_granges <- ensembl.genes[rownames(sig_df)]
+sig_de_granges <- promoters(sig_de_granges, upstream= 500, downstream = 500, use.names = TRUE)
+
+## All expressed genes
+all_granges <- ensembl.genes[rownames(counts(dds_LRT)[2:nrow(counts(dds_LRT)),])]
+all_granges <- promoters(all_granges, upstream = 500, downstream = 500, use.names = TRUE)
+```
+
+```{r save data}
+## Note that the fold changes for results_LRT are not accurate... only the padj. values are!
+results_LRT = results_LRT %>%
+  as.data.frame() %>%
+  select(pvalue,padj,gene_biotype,external_gene_name)
+
+sig_padj_genes = sig_padj_genes %>%
+  as.data.frame() %>%
+  select(pvalue,padj,gene_biotype,external_gene_name)
+
+## This writes out csv file of significant DE genes by both FDR 10%
+write.csv(results_LRT, "analysis/output/DE/all_de_genes.csv", row.names=TRUE, col.names = TRUE)
+write.csv(sig_padj_genes, "analysis/output/DE/significant_de_genes.csv", row.names = TRUE, col.names = TRUE)
+
+saveRDS(dds_LRT, "analysis/output/DE/dds_de.rds")
+saveRDS(significant_rld, "analysis/output/DE/significant_rld.rds")
+saveRDS(results_LRT, "analysis/output/DE/results_LRT.rds")
+saveRDS(sig_padj_genes, "analysis/output/DE/sig_results.rds")
+saveRDS(sig_de_granges, "analysis/output/DE/sig_de_granges.rds")
+saveRDS(all_granges, "analysis/output/DE/all_granges.rds")
+```
+
+## Session Info
+```{r}
+sessionInfo()
+```
