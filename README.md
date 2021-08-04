@@ -14,7 +14,7 @@ Running under: macOS Big Sur 10.16
 Versions of R packages used can be found in the Session Info section at the bottom of each `.html` file. 
 
 ## Data
-* All raw and aligned data for this analysis can be obtained from GEO via the study accession number GSE178187. The processed data can also be found in this repository under the folder data/aligned.
+* All raw and aligned data for this analysis can be obtained from GEO via the study accession number GSEXXXXXX. The processed data can also be found in this repository under the folder data/aligned.
 * **Annotation file used:** Drosophila_melanogaster.BDGP6.22.97.chr.gtf
 * **Reference fasta file used:** dm6.fa (Ensembl v97)
 
