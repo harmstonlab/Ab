@@ -30,6 +30,6 @@ Wg_Ab (light)|Guts from flies in which Wg and ABCry2mCh are over-expressed in th
 
 **! Ensure that the annotation file is in the data/annotation folder before running the analysis**
 
-The analysis was carried out to compare gene expression between 4 conditions -- control/TdTomato (WT), expressing A{$\beta$}-42-CRY2-mCh (Ab), expressing Wg alone (Wg), and A{$\beta}/-42-CRY2-mCh and Wg together (WgA{$\beta}/) -- using the QC.Rmd, DE.Rmd, and V_E.Rmd scripts for quality control, differential expression, and visualisation and enrichment respectively.
+The analysis was carried out to compare gene expression between 4 conditions -- control/TdTomato (WT), expressing AB-42-CRY2-mCh (Ab), expressing Wg alone (Wg), and AB-42-CRY2-mCh and Wg together (WgAb) -- using the QC.Rmd, DE.Rmd, and V_E.Rmd scripts for quality control, differential expression, and visualisation and enrichment respectively.
 
 If running from scratch, these scripts can be found in the analysis folder and need to be run in the sequential order of QC.Rmd > DE.Rmd > V_E.Rmd as each script generates files required by the subsequent scripts. If not running from scratch, the outputs of each script can be found in their respective output subfolder in the analysis main folder. If the repository is cloned as is, and the .Rproj file is used, there should have no issues running the scripts.
