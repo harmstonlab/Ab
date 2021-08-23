@@ -121,24 +121,32 @@ pheatmap(pam_clust[,1:(ncol(pam_clust)-1)],
 ```{r}
 pam_clust_df <- as.data.frame(pam_clust)
 pam_clust_df$gene_name <- ensembl_genes[rownames(pam_clust_df),]$external_gene_name
+```
 
+```{r}
 pam_clust1_genes <- pam_clust_df[pam_clust_df$Cluster == 3, ] %>%
-  dplyr::select(-Cluster)
+  mutate(Cluster = 1)
 
-pam_clust2_genes <- pam_clust_df[pam_clust_df$Cluster == 2, ] %>%
-  dplyr::select(-Cluster)
+pam_clust2_genes <- pam_clust_df[pam_clust_df$Cluster == 2, ]
 
 pam_clust3_genes <- pam_clust_df[pam_clust_df$Cluster == 1, ] %>%
-  dplyr::select(-Cluster)
+  mutate(Cluster = 3)
 
 pam_clust4_genes <- pam_clust_df[pam_clust_df$Cluster == 5, ] %>%
-  dplyr::select(-Cluster)
+  mutate(Cluster = 4)
 
 pam_clust5_genes <- pam_clust_df[pam_clust_df$Cluster == 4, ] %>%
-  dplyr::select(-Cluster)
+  mutate(Cluster = 5)
 
 pam_clust6_genes <- pam_clust_df[pam_clust_df$Cluster == 6, ] %>%
-  dplyr::select(-Cluster)
+  mutate(Cluster = 6)
+```
+
+```{r}
+pam_clust_df = rbind(pam_clust1_genes, pam_clust2_genes, pam_clust3_genes, pam_clust4_genes, pam_clust5_genes, pam_clust6_genes)
+pam_clust_df %>% 
+  dplyr::select(Cluster, gene_name) %>%
+  datatable(options = list(scrollX = TRUE), class = "white-space: nowrap")
 ```
 
 pam_cluster | Number of Genes
@@ -169,6 +177,19 @@ c5 <- gene_boxplot(all_nc, "pros", 0, 500)
 c6 <- gene_boxplot(all_nc, "plum", 0, 500)
 
 all_plots <- plot_grid(plotlist = list(c1,c2,c3,c4,c5,c6), nrow = 2, ncol = 3)
+plot_grid(legend, all_plots, nrow = 2, ncol = 1, rel_heights = c(.1, 1))
+```
+
+# Expression Boxplots of Hrs, Gprk2, InR, Akt1 (Akt), and Pi3K92E
+```{r}
+hrs <- gene_boxplot(all_nc, "Hrs", 1500, 3500)
+gprk2 <- gene_boxplot(all_nc, "Gprk2", 1200, 2200)
+inr <- gene_boxplot(all_nc, "InR", 1000, 3500)
+akt1 <- gene_boxplot(all_nc, "Akt1", 2500, 6000)
+pi <- gene_boxplot(all_nc, "Pi3K92E", 1000, 3000)
+
+
+all_plots <- plot_grid(plotlist = list(hrs,gprk2,inr,akt1,pi), nrow = 2, ncol = 3)
 plot_grid(legend, all_plots, nrow = 2, ncol = 1, rel_heights = c(.1, 1))
 ```
 
@@ -446,7 +467,7 @@ all_KEGG %>%
 
 ## GO:BP
 ```{r}
-all_go = rbindlist(list(c1_go,c2_go,c3_go,c4_go,c5_go,c6_go))
+all_go = rbind(c1_go,c2_go,c3_go,c4_go,c5_go,c6_go)
 
 all_go %>%
   mutate(Term = gsub("\\([^()]*\\)", "", Term),
@@ -597,7 +618,6 @@ cg6 <- gene_boxplot(all_nc, "CG6707", 1500, 4000)
 cam <- gene_boxplot(all_nc, "Cam", 20000, 45000)
 fz4 <- gene_boxplot(all_nc, "fz4", 600, 1200)
 
-
 all_plots <- plot_grid(plotlist = list(shrb,rbpn,rab,efa6,chmp2b,hrs,smurf,inr,gprk2,asap,atg2,cg5,cp1,ctsb1,akt1,pi,ragab,gga,cg1,npc2e,vha,npc1b,cg11,ipp,cg6,cam,fz4), nrow = ceiling(length(unique(unlist(strsplit(c2_kegg_sig$Genes, ";"))))/5), ncol = 5)
 plot_grid(legend, all_plots, nrow = 2, ncol = 1, rel_heights = c(.1, 1))
 ```
@@ -605,12 +625,13 @@ plot_grid(legend, all_plots, nrow = 2, ncol = 1, rel_heights = c(.1, 1))
 
 ```{r}
 ## writing out files
-anova <- as.data.frame(results_LRT)
+anova <- as.data.frame(results_LRT) 
+anova <- anova[2:nrow(anova),]
 anova$Cluster = pam_clust_df[match(rownames(anova),rownames(pam_clust_df)),]$Cluster
 anova <- anova %>%
  arrange(Cluster)
 write.csv(anova, "analysis/output/V_E/anova.csv")
-write.csv(pam_clust_df, "analysis/output/V_E/clusters.csv", row.names = TRUE, col.names = TRUE)
+write.csv(pam_clust_df, "analysis/output/V_E/clusters.csv")
 ```
 
 # Session Info
