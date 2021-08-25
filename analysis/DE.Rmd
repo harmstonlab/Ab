@@ -51,6 +51,16 @@ filter = apply(counts(dds, normalized=TRUE), 1, function(x){ mean(x) >= 10 })
 dds = dds[filter, ]
 ```
 
+## RLE plot
+```{r}
+rld <- rlog(dds)
+assay(rld) %>%
+  as.data.frame() %>%
+  gather() %>%
+  ggplot(aes(x=key, y=value)) + 
+  geom_boxplot() + ylab("Log Expression ") + xlab("Sample")
+```
+
 ## Wald Tests {.tabset}
 ```{r}
 wald_dds = nbinomWaldTest(dds)
